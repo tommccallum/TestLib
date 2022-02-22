@@ -64,7 +64,7 @@ void ExceptLib_debug(ExceptionType type, char const * fn) {
 //
 // these lines must be in the same function otherwise the longjmp fails
 #define TRY         _EXCEPTION_LIST->type = setjmp(pushExceptionState()->env); switch( _EXCEPTION_LIST->type ) { case 0:
-#define END_TRY     popExceptionState(); }
+#define END_TRY     } popExceptionState();
 #define RAISE(x)    ExceptLib_debug(x,__func__); longjmp(_EXCEPTION_LIST->env, x)
 #define CASE        break; case
 #define DEFAULT     break; default
