@@ -14,6 +14,23 @@ int div(int a, int b) {
 }
 
 
+void test_embedded_try_catch() 
+{
+  TRY
+    TRY
+      div(2,0);
+      assert(1==0);             // we assert here as we should not reach it
+    CASE DIVIDE_BY_ZERO:
+      exceptlib_trace();
+      assert(_EXCEPTION_LIST->type == DIVIDE_BY_ZERO);
+    END_TRY
+  CASE DIVIDE_BY_ZERO:
+    assert(_EXCEPTION_LIST->type == DIVIDE_BY_ZERO);
+  END_TRY
+  assert(exceptlib_isExceptionListEmpty());
+}
+
+
 void test_single_try_catch() 
 {
   TRY
@@ -29,6 +46,9 @@ int ApplicationEntry(int argc, char** argv, char** env) {
   (void) argc;
   (void) argv;
   (void) env;
+  printf("test_single_try_catch\n");
   test_single_try_catch();
+  printf("test_embedded_try_catch\n");
+  test_embedded_try_catch();
   return 0;
 }

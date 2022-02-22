@@ -31,15 +31,20 @@ typedef struct ExceptionState_t
 {
     jmp_buf                     env;
     ExceptionType               type;
+    char const *                fn;
+    int                         line;
+    char const *                raise_fn;
+    int                         raise_line;
     struct ExceptionState_t*    next;
 } ExceptionState;
 
 // forward declare our functions that will be used with our TRY...CATCH block
-ExceptionState* exceptlib_pushExceptionState();
+ExceptionState* exceptlib_pushExceptionState(char const * fn, int lineno);
 void exceptlib_popExceptionState();
 int exceptlib_exceptionListLength();
 int exceptlib_isExceptionListEmpty();
-void exceptLib_debug(ExceptionType type, char const * fn);
+void exceptlib_debug(ExceptionType type, char const * fn);
+void exceptlib_trace();
 
 // This is a user defined function that will be called by the function 'main'.
 int ApplicationEntry(int argc, char** argv, char** env);
@@ -50,11 +55,15 @@ int ApplicationEntry(int argc, char** argv, char** env);
 ExceptionState* _EXCEPTION_LIST = NULL;
 
 
-ExceptionState* exceptlib_pushExceptionState()
+ExceptionState* exceptlib_pushExceptionState(char const * fn, int lineno)
 {
     ExceptionState * new_state;
     new_state = (ExceptionState*) malloc(sizeof(ExceptionState));
     new_state->type = NO_EXCEPTION;
+    new_state->fn   = fn;
+    new_state->line = lineno;
+    new_state->raise_fn   = NULL;
+    new_state->raise_line = -1;
     new_state->next = _EXCEPTION_LIST;
     _EXCEPTION_LIST = new_state;
 #ifdef USE_EXCEPTION_DEBUG
@@ -89,12 +98,36 @@ int exceptlib_isExceptionListEmpty() {
     return exceptlib_exceptionListLength() == EMPTY_EXCEPTION_LIST_SIZE;
 }
 
-void exceptLib_debug(ExceptionType type, char const * fn) {
+void exceptlib_debug(ExceptionType type, char const * fn) {
     printf("[DEBUG] Exception of type %d was thrown from function '%s'\n", type, fn);
 }
 
+void exceptlib_trace_helper(ExceptionState* next, int index) {
+    if ( next == NULL ) {
+        return;
+    }
+    if ( next->raise_fn != NULL ) {
+        printf("  [%d] %s:%d\n", index, next->raise_fn, next->raise_line);
+        index += 1;
+    }
+    printf("  [%d] %s:%d\n", index, next->fn, next->line);
+    exceptlib_trace_helper(next->next, index + 1);
+}
+
+void exceptlib_trace(void) {
+    printf("This is not a stack trace, but a trace through all the try...catch blocks up to the point of the RAISE.\n");
+    printf("Trace:\n");
+    ExceptionState* runner = _EXCEPTION_LIST;
+    exceptlib_trace_helper(runner, 0);
+}
+
+void exceptlib_updateExceptionState(char const * fn, int linenum) {
+    _EXCEPTION_LIST->raise_fn     = fn;
+    _EXCEPTION_LIST->raise_line   = linenum;
+}
+
 #ifdef USE_EXCEPTION_DEBUG
-#   define LOG_DEBUG(x,y) exceptLib_debug(x,y)
+#   define LOG_DEBUG(x,y) exceptlib_debug(x,y)
 #else
 #   define LOG_DEBUG(x,y)
 #endif
@@ -103,9 +136,9 @@ void exceptLib_debug(ExceptionType type, char const * fn) {
 // We use a switch statement to get as close as the normal excepted syntax.
 //
 // these lines must be in the same function otherwise the longjmp fails
-#define TRY         _EXCEPTION_LIST->type = setjmp(exceptlib_pushExceptionState()->env); switch( _EXCEPTION_LIST->type ) { case 0:
+#define TRY         _EXCEPTION_LIST->type = setjmp(exceptlib_pushExceptionState(__func__, __LINE__)->env); switch( _EXCEPTION_LIST->type ) { case 0:
 #define END_TRY     } exceptlib_popExceptionState();
-#define RAISE(x)    LOG_DEBUG(x,__func__); longjmp(_EXCEPTION_LIST->env, x)
+#define RAISE(x)    LOG_DEBUG(x,__func__); exceptlib_updateExceptionState(__func__, __LINE__); longjmp(_EXCEPTION_LIST->env, x)
 #define CASE        break; case
 #define DEFAULT     break; default
 #define FINALLY     } switch(1) { case 1:
