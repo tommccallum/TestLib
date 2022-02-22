@@ -68,7 +68,7 @@ void ExceptLib_debug(ExceptionType type, char const * fn) {
 #define RAISE(x)    ExceptLib_debug(x,__func__); longjmp(_EXCEPTION_LIST->env, x)
 #define CASE        break; case
 #define DEFAULT     break; default
-#define FINALLY     popExceptionState(); } switch(1) { case 1:
+#define FINALLY     } switch(1) { case 1:
 
 int div(int a, int b) {
     if ( b == 0 ) {
