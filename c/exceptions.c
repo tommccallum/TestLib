@@ -115,6 +115,11 @@ int ApplicationEntry(int argc, char** argv, char** env) {
 #define USE_EXCEPTION_MAIN
 
 #ifdef USE_EXCEPTION_MAIN
+
+// We include a specialised main function that will hand off to a user defined ApplicationEntry function.
+// This is done so that we can catch any exceptions which have not been wrapped in specific try...catch
+// clauses.
+
 int main(int argc, char** argv, char** env) {
     // here we want to catch any exceptions which have not been caught
     // and tell the user about them.
@@ -126,21 +131,22 @@ int main(int argc, char** argv, char** env) {
         // the exception type value
         returnCode = ApplicationEntry(argc, argv, env);
     DEFAULT:
-        printf("outermost default exception handler\n");
         runner = _EXCEPTION_LIST;
+        int depth = exceptionListLength();
         while ( runner != NULL ) {
             if ( lastExceptionCode == 0 ) {
                 lastExceptionCode = runner->type;
             }
             if ( runner->type != 0 ) {
-                printf("Unhandled exception %d\n", runner->type);
+                printf("[%d] Unhandled exception %d\n", depth, runner->type);
             }
             runner = runner->next;
+            depth--;
         }
-        if ( _EXCEPTION_LIST->next != NULL ) {
-            int n = exceptionListLength();
-            printf("Unhandled exception handler found (len: %d)\n", n-1);
-        }
+        // if ( _EXCEPTION_LIST->next != NULL ) {
+        //     int n = exceptionListLength();
+        //     printf("Unhandled exception handler found (len: %d)\n", n-1);
+        // }
     END_TRY
 
     if ( lastExceptionCode != NO_EXCEPTION ) {
@@ -150,6 +156,7 @@ int main(int argc, char** argv, char** env) {
     }
     return returnCode;
 }
+
 #endif
 
 
