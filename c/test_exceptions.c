@@ -1,6 +1,18 @@
+#define USE_EXCEPTION_DEBUG
 #define USE_EXCEPTION_MAIN
+
 #include "exceptlib.h"
 #include "assert.h"
+
+int div(int a, int b) {
+  printf("Divide %d by %d\n", a, b);
+  if ( b == 0 ) {
+      RAISE(DIVIDE_BY_ZERO);
+  } else {
+      return a / b;
+  }
+}
+
 
 void test_single_try_catch() 
 {
@@ -10,7 +22,7 @@ void test_single_try_catch()
   CASE DIVIDE_BY_ZERO:
     assert(_EXCEPTION_LIST->type == DIVIDE_BY_ZERO);
   END_TRY
-  assert(isExceptionListEmpty());
+  assert(exceptlib_isExceptionListEmpty());
 }
 
 int ApplicationEntry(int argc, char** argv, char** env) {
