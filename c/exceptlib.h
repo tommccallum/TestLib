@@ -14,6 +14,13 @@
 // we need malloc to allocate memory for each exception state
 #include <malloc.h>
 
+// for backtrace and backtrace_symbols functionality
+#include <execinfo.h>
+
+// string functions such as strlen
+#define __STDC_WANT_LIB_EXT1__ 1
+#include <stdlib.h>
+#include <string.h>
 
 // If we are starting using the given main function then there will be 
 // at least 1 try...catch state on our linked list.
@@ -35,6 +42,7 @@ typedef struct ExceptionState_t
     int                         line;
     char const *                raise_fn;
     int                         raise_line;
+    char *                      trace;
     struct ExceptionState_t*    next;
 } ExceptionState;
 
@@ -64,6 +72,7 @@ ExceptionState* exceptlib_pushExceptionState(char const * fn, int lineno)
     new_state->line = lineno;
     new_state->raise_fn   = NULL;
     new_state->raise_line = -1;
+    new_state->trace = NULL;
     new_state->next = _EXCEPTION_LIST;
     _EXCEPTION_LIST = new_state;
 #ifdef USE_EXCEPTION_DEBUG
@@ -77,6 +86,9 @@ void exceptlib_popExceptionState() {
     printf("(start) popExceptionState (len: %d)\n", n2);
     ExceptionState* current = _EXCEPTION_LIST;
     _EXCEPTION_LIST = _EXCEPTION_LIST->next;
+    if ( current->trace != NULL ) {
+        free(current->trace);
+    }
     free(current);
 #ifdef USE_EXCEPTION_DEBUG
     int n = exceptlib_exceptionListLength();
@@ -106,6 +118,9 @@ void exceptlib_trace_helper(ExceptionState* next, int index) {
     if ( next == NULL ) {
         return;
     }
+    if ( next->trace != NULL ) {
+        printf("%s", next->trace);
+    }
     if ( next->raise_fn != NULL ) {
         printf("  [%d] %s:%d\n", index, next->raise_fn, next->raise_line);
         index += 1;
@@ -119,11 +134,48 @@ void exceptlib_trace(void) {
     printf("Trace:\n");
     ExceptionState* runner = _EXCEPTION_LIST;
     exceptlib_trace_helper(runner, 0);
+
+    printf("Example stack trace, using glibc backtrace, this needs to be added when we Raise an exception:\n");
+    void* callstack[128];
+    int i, frames = backtrace(callstack, 128);
+    char** strs = backtrace_symbols(callstack, frames);
+    // start at 1 as we don't care about this function in the stack trace
+    for (i = 1; i < frames; ++i) {
+        printf("  [%d] %s\n", i-1, strs[i]);
+    }
+    free(strs);
 }
 
 void exceptlib_updateExceptionState(char const * fn, int linenum) {
     _EXCEPTION_LIST->raise_fn     = fn;
     _EXCEPTION_LIST->raise_line   = linenum;
+
+    // save the stack trace as a string to the head of the Exception
+    void* callstack[128];
+    char buffer[255];
+    int i, frames = backtrace(callstack, 128);
+    char** strs = backtrace_symbols(callstack, frames);
+    // start at 1 as we don't care about this function in the stack trace
+    int totalStringLength = 0;
+    for (i = 1; i < frames; ++i) {
+        memset(buffer, 0,255);
+        sprintf(buffer, "  [%d] %s\n", i-1, strs[i]);
+        totalStringLength += strlen(buffer)+1;
+    }
+    if ( totalStringLength > 0 ) {
+        totalStringLength = totalStringLength+ 1;
+        char* traceBuffer = (char*) malloc(sizeof(char) * totalStringLength);
+        memset(traceBuffer, 0, totalStringLength);
+        int b = 0;
+        for (i = 1; i < frames; ++i) {
+            memset(buffer,0,255);
+            snprintf(buffer, 255, "  [%d] %s\n", i-1, strs[i]);
+            strncpy(&traceBuffer[b], buffer, strlen(buffer));
+            b += strlen(buffer);
+        }
+        _EXCEPTION_LIST->trace = traceBuffer;
+    }
+    free(strs);
 }
 
 #ifdef USE_EXCEPTION_DEBUG
